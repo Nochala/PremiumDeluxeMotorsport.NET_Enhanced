@@ -16,6 +16,7 @@ Release v5.0.0
 - Replaced **INMNativeUI** with **LemonUI** for improved stability
 - Resolved all known crash issues
 - Updated the project to ScriptHookVDotNet V3
+- Changed UI sprite texture
 
 ## Credits
 ### **This project is based on the original Premium Deluxe Motorsport mod created by ImNotMentaL.** 
