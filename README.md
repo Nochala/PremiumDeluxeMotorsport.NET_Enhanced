@@ -5,9 +5,9 @@ Features:
 You can buy All cars and bikes except trucks, trailers, trains, planes, buses, helicopters and bicycle.
 
 Requirements:
-- Latest ScriptHookV
-- Latest Community Script Hook V .NET
-- Latest LemonUI
+- Latest [**ScriptHookV**](https://www.dev-c.com/gtav/scripthookv/)
+- Latest **ScriptHookVDotNet v3** for [**Enhanced**](https://www.gta5-mods.com/tools/script-hook-v-net-enhanced) or [**Legacy**](https://www.gta5-mods.com/tools/scripthookv-net)
+- Latest [**LemonUI**](https://www.gta5-mods.com/tools/lemonui)
 
 ## [ **CHANGELOG** ]
 Release v5.0.0
