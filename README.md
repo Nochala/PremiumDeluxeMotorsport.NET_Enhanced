@@ -17,6 +17,7 @@ Release v5.0.0
 - Resolved all known crash issues
 - Updated the project to ScriptHookVDotNet V3
 - Changed UI sprite texture
+- Updated vehicle list for latest GTA V Updates
 
 ## Credits
 ### **This project is based on the original Premium Deluxe Motorsport mod created by ImNotMentaL.** 
