@@ -29,6 +29,9 @@ ___________________________________
 - Sell vehicles at Premium Deluxe Motorsport
 
 ## [ **CHANGELOG** ]
+**Quick Fix v1.0.1**
+- Fixed an issue where the info popup wasn't displaying roof or door toggle functions
+
 **Release v1.0.0**
 - Initial Release
   
