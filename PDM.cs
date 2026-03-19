@@ -14,6 +14,14 @@ namespace PremiumDeluxeRevamped
     {
         private static string Gxt(string key) => Game.GetLocalizedString(key);
 
+        private static string LocalizedOrDefault(string key, string fallback)
+        {
+            string value = Gxt(key);
+            return string.IsNullOrWhiteSpace(value) || string.Equals(value, "NULL", StringComparison.OrdinalIgnoreCase)
+                ? fallback
+                : value;
+        }
+
         private const float PdmPedChairSearchRadius = 3.0f;
         private const float PdmPedSeatSnapDistance = 0.65f;
         private const int PdmPedSeatRetryIntervalMs = 1500;
@@ -33,10 +41,10 @@ namespace PremiumDeluxeRevamped
 
                 Helper.LoadSettings();
                 logger.Log("Premium Deluxe Motorsport initialized. Logging enabled.");
-                Helper.BtnRotLeft = new InstructionalButton(Gxt("CMM_MOD_S6"), Helper.keyDoor);
-                Helper.BtnRotRight = new InstructionalButton(Gxt("CMOD_MOD_ROF"), Helper.keyRoof);
-                Helper.BtnCamera = new InstructionalButton(Gxt("CTRL_0"), Helper.keyCamera);
-                Helper.BtnZoom = new InstructionalButton(Gxt("HUD_INPUT91"), Helper.keyZoom);
+                Helper.BtnRotLeft = new InstructionalButton(LocalizedOrDefault("CMM_MOD_S6", "Doors"), Helper.keyDoor);
+                Helper.BtnRotRight = new InstructionalButton(LocalizedOrDefault("CMOD_MOD_ROF", "Roof"), Helper.keyRoof);
+                Helper.BtnCamera = new InstructionalButton(LocalizedOrDefault("CTRL_0", "Camera"), Helper.keyCamera);
+                Helper.BtnZoom = new InstructionalButton(LocalizedOrDefault("HUD_INPUT91", "Zoom"), Helper.keyZoom);
 
                 CreateEntrance();
                 GlobalVariable.Get((int)Helper.GetGlobalValue()).Write(1);
