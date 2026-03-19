@@ -1,5 +1,7 @@
 # PremiumDeluxeMotorsport Revamped
-Premium Deluxe Motorsport Car Shop Mod for Grand Theft Auto V
+[![Latest Release](https://img.shields.io/github/v/release/Nochala/PremiumDeluxeMotorsport_Revamped?include_prereleases&label=Version)](https://github.com/Nochala/PremiumDeluxeMotorsport_Revamped/releases/latest)
+
+#### Premium Deluxe Motorsport Car Shop Mod for Grand Theft Auto V
 
 Features:
 You can buy All cars and bikes except trucks, trailers, trains, planes, buses, helicopters and bicycle.
