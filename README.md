@@ -29,6 +29,7 @@ ___________________________________
 - Sell vehicles at Premium Deluxe Motorsport
 - Function to search vehicles
 - Better Addon Vehicle Support
+- Function to toggle headlights on/off in vehicle viewer
 
 ## [ **CHANGELOG** ]
 **Quick Fix v1.0.1**
