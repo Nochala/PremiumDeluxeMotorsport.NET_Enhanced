@@ -28,9 +28,14 @@ namespace PremiumDeluxeRevamped
         private static readonly Vector3 PdmChairSeatOffset = new Vector3(0.0f, -0.04f, 0.52f);
         private const float PdmDoorGreetingDistance = 4.75f;
         private const int PdmPedGreetingCooldownMs = 6000;
+        private const int PdmStoreCrimeWantedLevel = 1;
         private static int pdmPedNextSeatRetryAt;
         private static int pdmPedNextGreetingAt;
         private static bool clerkGreetedForCurrentVisit;
+        private static bool pdmStoreClosedForCrime;
+        private static bool pdmStoreClosedByClerkDeath;
+        private static bool playerWasInsidePdmLastTick;
+        private static bool playerWasInVehicleLastTick;
 
         public PDM()
         {
@@ -202,9 +207,107 @@ namespace PremiumDeluxeRevamped
         {
             clerkGreetedForCurrentVisit = false;
         }
+        private static void EnsurePlayerWantedLevelAtLeast(int wantedLevel)
+        {
+            try
+            {
+                if (Helper.GP != null && Helper.GP.Wanted.WantedLevel < wantedLevel)
+                {
+                    Function.Call(Hash.SET_PLAYER_WANTED_LEVEL, Helper.GP.Handle, wantedLevel, false);
+                    Function.Call(Hash.SET_PLAYER_WANTED_LEVEL_NOW, Helper.GP.Handle, false);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Log("Error Set Wanted Level " + ex.Message + " " + ex.StackTrace);
+            }
+        }
+
+        private static void CloseStoreForCrime(bool closedByClerkDeath)
+        {
+            pdmStoreClosedForCrime = true;
+            pdmStoreClosedByClerkDeath = pdmStoreClosedByClerkDeath || closedByClerkDeath;
+            ResetClerkGreetingState();
+
+            try
+            {
+                if (Helper.TaskScriptStatus != -1 || (MenuHelper._menuPool != null && MenuHelper._menuPool.AreAnyVisible))
+                {
+                    MenuHelper.MenuCloseHandler(null);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Log("Error Closing Store " + ex.Message + " " + ex.StackTrace);
+            }
+        }
+
+        private static void ReopenStoreIfSafe()
+        {
+            if (!pdmStoreClosedForCrime || Helper.GP == null || Helper.GPC == null || !Helper.GPC.Exists() || Helper.GPC.IsDead)
+            {
+                return;
+            }
+
+            if (Helper.GP.Wanted.WantedLevel > 0)
+            {
+                return;
+            }
+
+            if (pdmStoreClosedByClerkDeath)
+            {
+                try
+                {
+                    if (Helper.pdmPed != null && Helper.pdmPed.Exists() && Helper.pdmPed.IsDead)
+                    {
+                        Helper.pdmPed.Delete();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.Log("Error Reset Dead Clerk " + ex.Message + " " + ex.StackTrace);
+                }
+            }
+
+            pdmStoreClosedForCrime = false;
+            pdmStoreClosedByClerkDeath = false;
+        }
+
+        private static void HandlePdmCrimeState()
+        {
+            if (Helper.GPC == null || !Helper.GPC.Exists())
+            {
+                return;
+            }
+
+            bool playerInsidePdm = Helper.poly.IsInInterior(Helper.GPC.Position);
+            bool playerInVehicle = Helper.GPC.IsInVehicle();
+
+            if (Helper.pdmPed != null && Helper.pdmPed.Exists() && Helper.pdmPed.IsDead && !pdmStoreClosedForCrime)
+            {
+                EnsurePlayerWantedLevelAtLeast(PdmStoreCrimeWantedLevel);
+                CloseStoreForCrime(true);
+            }
+            else if (!pdmStoreClosedForCrime && playerInsidePdm && playerInVehicle && playerWasInsidePdmLastTick && !playerWasInVehicleLastTick && Helper.TestDrive != 2 && Helper.TestDrive != 3)
+            {
+                EnsurePlayerWantedLevelAtLeast(PdmStoreCrimeWantedLevel);
+                CloseStoreForCrime(false);
+            }
+
+            ReopenStoreIfSafe();
+
+            playerWasInsidePdmLastTick = playerInsidePdm;
+            playerWasInVehicleLastTick = playerInVehicle;
+        }
+
 
         private static void TryGreetPlayerFromClerk()
         {
+            if (pdmStoreClosedForCrime)
+            {
+                return;
+            }
+
             if (Helper.GPC == null || !Helper.GPC.Exists() || Helper.GPC.IsDead || Helper.GPC.IsInVehicle())
             {
                 return;
@@ -262,10 +365,11 @@ namespace PremiumDeluxeRevamped
                 }
 
                 Helper.PdmDoorDist = World.GetDistance(Helper.GPC.Position, Helper.PdmDoor);
+                HandlePdmCrimeState();
 
                 try
                 {
-                    if (Helper.PdmDoorDist < 10.0f)
+                    if (Helper.PdmDoorDist < 10.0f && !pdmStoreClosedForCrime)
                     {
                         Prop chair = FindPdmChair();
                         EnsurePdmPedSeated(chair);
@@ -287,7 +391,7 @@ namespace PremiumDeluxeRevamped
                     ResetClerkGreetingState();
                 }
 
-                if (!Helper.GPC.IsInVehicle() && !Helper.GPC.IsDead && Helper.PdmDoorDist < 3.0f && Helper.GP.Wanted.WantedLevel == 0 && Helper.TaskScriptStatus == -1)
+                if (!Helper.GPC.IsInVehicle() && !Helper.GPC.IsDead && Helper.PdmDoorDist < 3.0f && Helper.GP.Wanted.WantedLevel == 0 && Helper.TaskScriptStatus == -1 && !pdmStoreClosedForCrime)
                 {
                     Helper.DisplayHelpTextThisFrame(Gxt("SHR_MENU"));
                 }
@@ -359,7 +463,7 @@ namespace PremiumDeluxeRevamped
                     World.DrawSpotLight(Helper.VehPreviewPos + Vector3.WorldUp * 4f + Vector3.WorldNorth * 4f, Vector3.WorldSouth + Vector3.WorldDown, Color.White, 30f, 30f, 100f, 50f, -1);
                 }
 
-                if (Game.IsControlJustPressed(Control.Context) && Helper.PdmDoorDist < 3.0f && !Helper.GPC.IsInVehicle() && Helper.GP.Wanted.WantedLevel == 0 && Helper.TaskScriptStatus == -1)
+                if (Game.IsControlJustPressed(Control.Context) && Helper.PdmDoorDist < 3.0f && !Helper.GPC.IsInVehicle() && Helper.GP.Wanted.WantedLevel == 0 && Helper.TaskScriptStatus == -1 && !pdmStoreClosedForCrime)
                 {
                     Helper.TaskScriptStatus = 0;
                     Helper.HideHud = true;
@@ -457,7 +561,7 @@ namespace PremiumDeluxeRevamped
                     }
                 }
 
-                Helper.PdmBlip.Alpha = (Game.IsMissionActive || Helper.GP.Wanted.WantedLevel > 1) ? 0 : 255;
+                Helper.PdmBlip.Alpha = (Game.IsMissionActive || Helper.GP.Wanted.WantedLevel > 1 || pdmStoreClosedForCrime) ? 0 : 255;
             }
             catch (Exception ex)
             {
@@ -476,6 +580,10 @@ namespace PremiumDeluxeRevamped
                 pdmPedNextSeatRetryAt = 0;
                 pdmPedNextGreetingAt = 0;
                 clerkGreetedForCurrentVisit = false;
+                pdmStoreClosedForCrime = false;
+                pdmStoreClosedByClerkDeath = false;
+                playerWasInsidePdmLastTick = false;
+                playerWasInVehicleLastTick = false;
             }
             catch (Exception ex)
             {

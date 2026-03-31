@@ -228,7 +228,28 @@ namespace PremiumDeluxeRevamped
         private const float SectionLabelBannerOffsetX = 12f;
         private const float SectionLabelBannerOffsetY = 1.5f;
         private const float LemonUiToShvdnScaledRatio = 720f / 1080f;
-
+        private const float VehicleStatsPanelOffsetX = 0f;
+        private const float VehicleStatsPanelOffsetY = -10f;
+        private const float VehicleStatsPanelWidth = 288f;
+        private const float VehicleStatsPanelHeight = 100f;
+        private const float VehicleStatsPanelPaddingLeft = 14f;
+        private const float VehicleStatsPanelPaddingTop = 10f;
+        private const float VehicleStatsRowSpacing = 21f;
+        private const float VehicleStatsBarOffsetX = 118f;
+        private const float VehicleStatsBarYOffset = 8f;
+        private const float VehicleStatsBarWidth = 150f;
+        private const float VehicleStatsBarHeight = 7f;
+        private const int VehicleStatsBarSegments = 5;
+        private const float VehicleStatsBarSegmentGap = 4f;
+        private const float VehicleStatsBarMaxValue = 200f;
+        private const float MenuAreaFallbackWidth = 431f;
+        private const float MenuAreaFallbackHeight = 550f;
+        private const float MenuAreaEstimatedBaseHeight = 170f;
+        private const float MenuAreaEstimatedRowHeight = 38f;
+        private const int MenuAreaEstimatedMaxVisibleRows = 10;
+        private const float MenuAreaEstimatedFooterBaseHeight = 46f;
+        private const float MenuAreaEstimatedFooterLineHeight = 18f;
+        private const int MenuAreaEstimatedFooterWrapCharacters = 38;
         private static string SaveBannerBitmap(Bitmap bitmap, string key)
         {
             if (bitmap == null)
@@ -1033,6 +1054,382 @@ namespace PremiumDeluxeRevamped
             return scaledY / 720f;
         }
 
+        private static bool TryConvertToFloat(object value, out float result)
+        {
+            switch (value)
+            {
+                case float floatValue:
+                    result = floatValue;
+                    return true;
+                case double doubleValue:
+                    result = (float)doubleValue;
+                    return true;
+                case decimal decimalValue:
+                    result = (float)decimalValue;
+                    return true;
+                case int intValue:
+                    result = intValue;
+                    return true;
+                case long longValue:
+                    result = longValue;
+                    return true;
+                case short shortValue:
+                    result = shortValue;
+                    return true;
+                case byte byteValue:
+                    result = byteValue;
+                    return true;
+                default:
+                    result = 0f;
+                    return false;
+            }
+        }
+
+        private static bool TryExtractPointF(object value, out PointF point)
+        {
+            if (value is PointF pointF)
+            {
+                point = pointF;
+                return true;
+            }
+
+            if (value is Point pointInt)
+            {
+                point = new PointF(pointInt.X, pointInt.Y);
+                return true;
+            }
+
+            float x;
+            float y;
+            if (TryConvertToFloat(GetReflectedMemberValue(value, "X"), out x)
+                && TryConvertToFloat(GetReflectedMemberValue(value, "Y"), out y))
+            {
+                point = new PointF(x, y);
+                return true;
+            }
+
+            point = PointF.Empty;
+            return false;
+        }
+
+        private static bool TryExtractSizeF(object value, out SizeF size)
+        {
+            if (value is SizeF sizeF)
+            {
+                size = sizeF;
+                return true;
+            }
+
+            if (value is Size sizeInt)
+            {
+                size = new SizeF(sizeInt.Width, sizeInt.Height);
+                return true;
+            }
+
+            if (value is RectangleF rectangleF)
+            {
+                size = rectangleF.Size;
+                return true;
+            }
+
+            if (value is Rectangle rectangle)
+            {
+                size = rectangle.Size;
+                return true;
+            }
+
+            float width;
+            float height;
+            if (TryConvertToFloat(GetReflectedMemberValue(value, "Width"), out width)
+                && TryConvertToFloat(GetReflectedMemberValue(value, "Height"), out height))
+            {
+                size = new SizeF(width, height);
+                return true;
+            }
+
+            size = SizeF.Empty;
+            return false;
+        }
+
+        private static bool TryGetEnumerableCount(object value, out int count)
+        {
+            count = 0;
+            if (value == null || value is string)
+            {
+                return false;
+            }
+
+            if (value is ICollection collection)
+            {
+                count = collection.Count;
+                return true;
+            }
+
+            if (value is IEnumerable enumerable)
+            {
+                foreach (object _ in enumerable)
+                {
+                    count++;
+                    if (count >= 512)
+                    {
+                        break;
+                    }
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryGetVisibleMenuObject(out object visibleMenu)
+        {
+            return TryFindVisibleNativeMenu(MenuHelper._menuPool, 0, new HashSet<int>(), out visibleMenu) && visibleMenu != null;
+        }
+
+        private static object GetVisibleMenuSelectedItemObject(object visibleMenu)
+        {
+            if (visibleMenu == null)
+            {
+                return null;
+            }
+
+            string[] directItemMembers =
+            {
+                "SelectedItem",
+                "CurrentItem",
+                "HoveredItem",
+                "ActiveItem",
+            };
+
+            foreach (string memberName in directItemMembers)
+            {
+                object selectedItem = GetReflectedMemberValue(visibleMenu, memberName);
+                if (selectedItem != null)
+                {
+                    return selectedItem;
+                }
+            }
+
+            if (!TryConvertToFloat(GetReflectedMemberValue(visibleMenu, "SelectedIndex"), out float selectedIndexValue))
+            {
+                return null;
+            }
+
+            int selectedIndex = Math.Max(0, (int)Math.Round(selectedIndexValue, MidpointRounding.AwayFromZero));
+            object items = GetReflectedMemberValue(visibleMenu, "Items");
+            if (items is IList itemList)
+            {
+                return selectedIndex >= 0 && selectedIndex < itemList.Count ? itemList[selectedIndex] : null;
+            }
+
+            if (items is IEnumerable enumerable)
+            {
+                int index = 0;
+                foreach (object item in enumerable)
+                {
+                    if (index == selectedIndex)
+                    {
+                        return item;
+                    }
+
+                    index++;
+                }
+            }
+
+            return null;
+        }
+
+        private static string GetSelectedMenuItemDescriptionText(object visibleMenu)
+        {
+            object selectedItem = GetVisibleMenuSelectedItemObject(visibleMenu);
+            if (selectedItem == null)
+            {
+                return string.Empty;
+            }
+
+            string[] descriptionMembers =
+            {
+                "Description",
+                "AltDescription",
+                "HelpText",
+                "Text",
+            };
+
+            foreach (string memberName in descriptionMembers)
+            {
+                object value = GetReflectedMemberValue(selectedItem, memberName);
+                if (value is string textValue && !string.IsNullOrWhiteSpace(textValue))
+                {
+                    return textValue;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static float EstimateVisibleMenuFooterHeightLemonUi(object visibleMenu)
+        {
+            if (visibleMenu == null)
+            {
+                return 0f;
+            }
+
+            string[] footerHeightMembers =
+            {
+                "DescriptionHeight",
+                "FooterHeight",
+                "HelpHeight",
+                "InfoHeight",
+            };
+
+            foreach (string memberName in footerHeightMembers)
+            {
+                if (TryConvertToFloat(GetReflectedMemberValue(visibleMenu, memberName), out float reflectedFooterHeight) && reflectedFooterHeight > 0f)
+                {
+                    return reflectedFooterHeight;
+                }
+            }
+
+            string descriptionText = GetSelectedMenuItemDescriptionText(visibleMenu);
+            if (string.IsNullOrWhiteSpace(descriptionText))
+            {
+                return 0f;
+            }
+
+            string normalizedDescription = descriptionText.Replace("\r", string.Empty).Trim();
+            if (normalizedDescription.Length == 0)
+            {
+                return 0f;
+            }
+
+            string[] explicitLines = normalizedDescription.Split(new[] { '\n' }, StringSplitOptions.None);
+            int wrappedLineCount = 0;
+            foreach (string explicitLine in explicitLines)
+            {
+                string line = explicitLine?.Trim() ?? string.Empty;
+                int estimatedSegments = Math.Max(1, (int)Math.Ceiling(line.Length / (double)MenuAreaEstimatedFooterWrapCharacters));
+                wrappedLineCount += estimatedSegments;
+            }
+
+            wrappedLineCount = Math.Max(1, wrappedLineCount);
+            return MenuAreaEstimatedFooterBaseHeight + ((wrappedLineCount - 1) * MenuAreaEstimatedFooterLineHeight);
+        }
+
+        private static SizeF EstimateVisibleMenuSizeLemonUi(object visibleMenu)
+        {
+            SizeF reflectedSize;
+            string[] sizeMembers =
+            {
+                "Size",
+                "MenuSize",
+                "VisibleSize",
+                "DrawSize",
+                "Bounds",
+                "Rectangle",
+            };
+
+            foreach (string memberName in sizeMembers)
+            {
+                if (TryExtractSizeF(GetReflectedMemberValue(visibleMenu, memberName), out reflectedSize)
+                    && reflectedSize.Width > 0f
+                    && reflectedSize.Height > 0f)
+                {
+                    return reflectedSize;
+                }
+            }
+
+            float reflectedWidth;
+            float reflectedHeight;
+            bool hasWidth = TryConvertToFloat(GetReflectedMemberValue(visibleMenu, "Width"), out reflectedWidth) && reflectedWidth > 0f;
+            bool hasHeight = TryConvertToFloat(GetReflectedMemberValue(visibleMenu, "Height"), out reflectedHeight) && reflectedHeight > 0f;
+            if (hasWidth && hasHeight)
+            {
+                return new SizeF(reflectedWidth, reflectedHeight);
+            }
+
+            int maxVisibleRows = MenuAreaEstimatedMaxVisibleRows;
+            string[] maxVisibleRowMembers =
+            {
+                "MaxItemsOnScreen",
+                "MaxVisibleItems",
+                "MaximumVisibleItems",
+                "MaxItems",
+            };
+
+            foreach (string memberName in maxVisibleRowMembers)
+            {
+                if (TryConvertToFloat(GetReflectedMemberValue(visibleMenu, memberName), out float reflectedMaxRows) && reflectedMaxRows > 0f)
+                {
+                    maxVisibleRows = Math.Max(1, (int)Math.Round(reflectedMaxRows, MidpointRounding.AwayFromZero));
+                    break;
+                }
+            }
+
+            int visibleRowCount = 0;
+            string[] visibleItemCollectionMembers =
+            {
+                "VisibleItems",
+                "DisplayedItems",
+                "ItemsToDraw",
+            };
+
+            foreach (string memberName in visibleItemCollectionMembers)
+            {
+                if (TryGetEnumerableCount(GetReflectedMemberValue(visibleMenu, memberName), out visibleRowCount) && visibleRowCount > 0)
+                {
+                    break;
+                }
+
+                visibleRowCount = 0;
+            }
+
+            if (visibleRowCount <= 0)
+            {
+                TryGetEnumerableCount(GetReflectedMemberValue(visibleMenu, "Items"), out visibleRowCount);
+            }
+
+            visibleRowCount = Math.Max(1, Math.Min(Math.Max(visibleRowCount, 1), Math.Max(1, maxVisibleRows)));
+
+            float width = hasWidth ? reflectedWidth : MenuAreaFallbackWidth;
+            float height = hasHeight ? reflectedHeight : (MenuAreaEstimatedBaseHeight + (visibleRowCount * MenuAreaEstimatedRowHeight));
+            height += EstimateVisibleMenuFooterHeightLemonUi(visibleMenu);
+            return new SizeF(width, height);
+        }
+
+        private static bool TryGetVisibleMenuAreaDrawBounds(out PointF position, out SizeF size)
+        {
+            position = PointF.Empty;
+            size = SizeF.Empty;
+
+            if (!TryGetVisibleMenuObject(out object visibleMenu))
+            {
+                return false;
+            }
+
+            if (TryExtractPointF(GetReflectedMemberValue(visibleMenu, "Position"), out PointF menuPosition))
+            {
+                position = ConvertLemonUiPointToShvdnScaled(menuPosition);
+            }
+            else if (TryGetVisibleMenuBannerBounds(out PointF bannerPosition, out SizeF _))
+            {
+                position = bannerPosition;
+            }
+            else
+            {
+                return false;
+            }
+
+            SizeF menuSize = EstimateVisibleMenuSizeLemonUi(visibleMenu);
+            if (menuSize.Width <= 0f || menuSize.Height <= 0f)
+            {
+                return false;
+            }
+
+            size = ConvertLemonUiSizeToShvdnScaled(menuSize);
+            return true;
+        }
+
         private static void GetMenuBannerDrawBounds(out PointF position, out SizeF size)
         {
             PointF bannerPosition;
@@ -1147,9 +1544,9 @@ namespace PremiumDeluxeRevamped
             DrawTextNormalized(menuTitle, sectionX, sectionY, 0.35f, GTA.UI.Font.ChaletLondon, Color.White);
         }
 
-        private static bool ShouldDrawVehiclePriceLabel()
+        private static bool IsVehicleViewerOverlayActive()
         {
-            if (Helper.VehiclePrice <= 0 || Helper.VehPreview == null || !Helper.VehPreview.Exists() || Helper.TaskScriptStatus != 0)
+            if (Helper.VehPreview == null || !Helper.VehPreview.Exists() || Helper.TaskScriptStatus != 0)
             {
                 return false;
             }
@@ -1159,24 +1556,23 @@ namespace PremiumDeluxeRevamped
                 return false;
             }
 
+            if (MenuHelper._menuPool == null || !MenuHelper._menuPool.AreAnyVisible)
+            {
+                return false;
+            }
+
             NativeMenu visibleMenu = MenuHelper.GetVisibleMenu();
-            if (visibleMenu == null || !object.ReferenceEquals(visibleMenu, MenuHelper.VehicleMenu))
+            if (visibleMenu == null)
             {
                 return false;
             }
 
-            if (visibleMenu.Items == null || visibleMenu.Items.Count == 0)
-            {
-                return false;
-            }
+            return !object.ReferenceEquals(visibleMenu, MenuHelper.MainMenu);
+        }
 
-            int selectedIndex = visibleMenu.SelectedIndex;
-            if (selectedIndex < 0 || selectedIndex >= visibleMenu.Items.Count)
-            {
-                return false;
-            }
-
-            return visibleMenu.Items[selectedIndex] != null;
+        private static bool ShouldDrawVehiclePriceLabel()
+        {
+            return Helper.VehiclePrice > 0 && IsVehicleViewerOverlayActive();
         }
 
         private static void DrawVehiclePriceLabel()
@@ -1191,6 +1587,148 @@ namespace PremiumDeluxeRevamped
             float priceY = 0.060f + (safeZoneMargin * 0.30f);
             string priceText = "PRICE $" + Helper.VehiclePrice.ToString("N0");
             DrawTextNormalized(priceText, rightX, priceY, 0.47f, GTA.UI.Font.ChaletLondon, Color.LightGreen, true);
+        }
+
+        private static float ConvertScaledWidthToNormalized(float scaledWidth)
+        {
+            float scaledScreenWidth = (float)GTA.UI.Screen.ScaledWidth;
+            if (scaledScreenWidth <= 0f)
+            {
+                return 0f;
+            }
+
+            return scaledWidth / scaledScreenWidth;
+        }
+
+        private static float ConvertScaledHeightToNormalized(float scaledHeight)
+        {
+            return scaledHeight / 720f;
+        }
+
+        private static float Clamp01(float value)
+        {
+            if (value <= 0f)
+            {
+                return 0f;
+            }
+
+            if (value >= 1f)
+            {
+                return 1f;
+            }
+
+            return value;
+        }
+
+        private static void DrawRectNormalized(float centerX, float centerY, float width, float height, Color color)
+        {
+            if (width <= 0f || height <= 0f)
+            {
+                return;
+            }
+
+            Function.Call(Hash.DRAW_RECT, centerX, centerY, width, height, color.R, color.G, color.B, color.A, false);
+        }
+
+        private static void GetMenuAreaDrawBounds(out PointF position, out SizeF size)
+        {
+            if (TryGetVisibleMenuAreaDrawBounds(out position, out size))
+            {
+                return;
+            }
+
+            size = ConvertLemonUiSizeToShvdnScaled(new SizeF(MenuAreaFallbackWidth, MenuAreaFallbackHeight));
+
+            if (TryGetVisibleMenuBannerBounds(out PointF bannerPosition, out SizeF _))
+            {
+                position = bannerPosition;
+                return;
+            }
+
+            try
+            {
+                position = ConvertLemonUiPointToShvdnScaled(SafeZone.GetSafePosition(new PointF(0f, 0f)));
+            }
+            catch
+            {
+                float safeZoneMargin = GetSafeZoneMargin();
+                position = ConvertNormalizedToScaledDraw(safeZoneMargin, safeZoneMargin);
+            }
+        }
+
+        private static bool ShouldDrawVehicleStatsPanel()
+        {
+            return IsVehicleViewerOverlayActive();
+        }
+
+        private static void DrawVehicleStatBarNativeStyle(float value, float barLeftScaled, float barTopScaled)
+        {
+            float clampedRatio = Clamp01(value / VehicleStatsBarMaxValue);
+            float segmentWidthScaled = (VehicleStatsBarWidth - (VehicleStatsBarSegmentGap * (VehicleStatsBarSegments - 1))) / VehicleStatsBarSegments;
+            float activeSegments = clampedRatio * VehicleStatsBarSegments;
+            float barCenterY = ConvertScaledDrawYToNormalized(barTopScaled + (VehicleStatsBarHeight * 0.5f));
+            float segmentHeightNormalized = ConvertScaledHeightToNormalized(VehicleStatsBarHeight);
+
+            for (int i = 0; i < VehicleStatsBarSegments; i++)
+            {
+                float segmentLeftScaled = barLeftScaled + (i * (segmentWidthScaled + VehicleStatsBarSegmentGap));
+                float segmentCenterX = ConvertScaledDrawXToNormalized(segmentLeftScaled + (segmentWidthScaled * 0.5f));
+                float segmentWidthNormalized = ConvertScaledWidthToNormalized(segmentWidthScaled);
+                Color baseColor = Color.FromArgb(115, 55, 55, 55);
+                Color fillColor = Color.FromArgb(235, 255, 255, 255);
+
+                DrawRectNormalized(segmentCenterX, barCenterY, segmentWidthNormalized, segmentHeightNormalized, baseColor);
+
+                float segmentFill = Clamp01(activeSegments - i);
+                if (segmentFill > 0f)
+                {
+                    float fillWidthScaled = segmentWidthScaled * segmentFill;
+                    float fillCenterX = ConvertScaledDrawXToNormalized(segmentLeftScaled + (fillWidthScaled * 0.5f));
+                    float fillWidthNormalized = ConvertScaledWidthToNormalized(fillWidthScaled);
+                    DrawRectNormalized(fillCenterX, barCenterY, fillWidthNormalized, segmentHeightNormalized, fillColor);
+                }
+            }
+        }
+
+        private static void DrawVehicleStatRow(string label, float value, float rowTopScaled, float panelLeftScaled)
+        {
+            float labelX = ConvertScaledDrawXToNormalized(panelLeftScaled + VehicleStatsPanelPaddingLeft);
+            float textY = ConvertScaledDrawYToNormalized(rowTopScaled);
+            float barLeftScaled = panelLeftScaled + VehicleStatsBarOffsetX;
+            float barTopScaled = rowTopScaled + VehicleStatsBarYOffset;
+
+            DrawTextNormalized(label, labelX, textY, 0.285f, GTA.UI.Font.ChaletLondon, Color.WhiteSmoke);
+            DrawVehicleStatBarNativeStyle(value, barLeftScaled, barTopScaled);
+        }
+
+        private static void DrawVehicleStatsPanel()
+        {
+            if (!ShouldDrawVehicleStatsPanel())
+            {
+                return;
+            }
+
+            GetMenuAreaDrawBounds(out PointF menuPosition, out SizeF menuSize);
+
+            float panelLeft = menuPosition.X + VehicleStatsPanelOffsetX;
+            float panelTop = menuPosition.Y + menuSize.Height + VehicleStatsPanelOffsetY;
+            float panelWidth = VehicleStatsPanelWidth;
+            float panelHeight = VehicleStatsPanelHeight;
+
+            float panelCenterX = ConvertScaledDrawXToNormalized(panelLeft + (panelWidth * 0.5f));
+            float panelCenterY = ConvertScaledDrawYToNormalized(panelTop + (panelHeight * 0.5f));
+            DrawRectNormalized(
+                panelCenterX,
+                panelCenterY,
+                ConvertScaledWidthToNormalized(panelWidth),
+                ConvertScaledHeightToNormalized(panelHeight),
+                Color.FromArgb(120, 0, 0, 0));
+
+            float firstRowTop = panelTop + VehicleStatsPanelPaddingTop;
+            DrawVehicleStatRow("Top Speed", Helper.GetVehTopSpeed(Helper.VehPreview), firstRowTop, panelLeft);
+            DrawVehicleStatRow("Acceleration", Helper.GetVehAcceleration(Helper.VehPreview), firstRowTop + VehicleStatsRowSpacing, panelLeft);
+            DrawVehicleStatRow("Braking", Helper.GetVehBraking(Helper.VehPreview), firstRowTop + (VehicleStatsRowSpacing * 2f), panelLeft);
+            DrawVehicleStatRow("Traction", Helper.GetVehTraction(Helper.VehPreview), firstRowTop + (VehicleStatsRowSpacing * 3f), panelLeft);
         }
 
         private void PDMeX_Tick(object sender, EventArgs e)
@@ -1220,6 +1758,7 @@ namespace PremiumDeluxeRevamped
                 DrawMenuBanner();
                 DrawCurrentSectionLabel();
                 DrawVehiclePriceLabel();
+                DrawVehicleStatsPanel();
                 if (Helper.ShowVehicleName && !string.IsNullOrEmpty(Helper.VehicleName) && Helper.VehPreview != null && Helper.poly.IsInInterior(Helper.VehPreview.Position) && Helper.TaskScriptStatus == 0)
                 {
                     float safeZoneMargin = GetSafeZoneMargin();

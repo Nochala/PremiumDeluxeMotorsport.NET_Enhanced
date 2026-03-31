@@ -56,6 +56,7 @@ namespace PremiumDeluxeRevamped
         public static NativeItem ItemSecColor;
         public static NativeItem ItemPeaColor;
         public static NativeItem ItemPlate;
+        public static NativeItem ItemPerformance;
 
         public static string[] Parameters = { "[name]", "[price]", "[model]", "[gxt]", "[make]" };
         public static ObjectPool _menuPool;
@@ -74,6 +75,9 @@ namespace PremiumDeluxeRevamped
         private static bool viewerActionInProgress;
         private const int VehicleMenuBaseMaxTitleLength = 30;
         private const int VehicleMenuMinTitleLength = 20;
+        private const string CategoryActionSearchVehicles = "SEARCH_VEHICLES";
+        private const int PerformanceUpgradePrice = 77500;
+        private static int PreviewVehicleBasePrice;
 
         private static string Gxt(string key) => Game.GetLocalizedString(key);
 
@@ -410,6 +414,202 @@ namespace PremiumDeluxeRevamped
 
         private static VehicleModCollection Mods(Vehicle vehicle) => vehicle.Mods;
 
+        private static string GetPerformanceUpgradeApplyTitle()
+            => CleanMenuText(Gxt("PERSO_MOD_PER"), "Performance");
+
+        private static string GetPerformanceUpgradeRemoveTitle()
+        {
+            string localized = Helper.GetLangEntry("BTN_REMOVE_PERFORMANCE_UPGRADES");
+            if (string.IsNullOrWhiteSpace(localized) || string.Equals(localized, "NULL", StringComparison.OrdinalIgnoreCase))
+            {
+                localized = "Remove Performance Upgrades";
+            }
+
+            return CleanMenuText(localized, "Remove Performance Upgrades");
+        }
+
+        private static bool IsPerformanceUpgradeActive(Vehicle vehicle)
+        {
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return false;
+            }
+
+            try
+            {
+                VehicleModCollection mods = Mods(vehicle);
+                mods.InstallModKit();
+
+                bool hasUpgradeablePerformanceMods = false;
+                VehicleModType[] indexedTypes =
+                {
+                    VehicleModType.Suspension,
+                    VehicleModType.Engine,
+                    VehicleModType.Brakes,
+                    VehicleModType.Transmission,
+                    VehicleModType.Armor,
+                };
+
+                foreach (VehicleModType modType in indexedTypes)
+                {
+                    try
+                    {
+                        int count = mods[modType].Count;
+                        if (count <= 0)
+                        {
+                            continue;
+                        }
+
+                        hasUpgradeablePerformanceMods = true;
+                        if (mods[modType].Index != count - 1)
+                        {
+                            return false;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                try
+                {
+                    bool turboInstalled = mods[VehicleToggleModType.Turbo].IsInstalled;
+                    hasUpgradeablePerformanceMods = true;
+                    if (!turboInstalled)
+                    {
+                        return false;
+                    }
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    bool xenonInstalled = mods[VehicleToggleModType.XenonHeadlights].IsInstalled;
+                    hasUpgradeablePerformanceMods = true;
+                    if (!xenonInstalled)
+                    {
+                        return false;
+                    }
+                }
+                catch
+                {
+                }
+
+                return hasUpgradeablePerformanceMods;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void RefreshPreviewVehiclePrice()
+        {
+            int basePrice = PreviewVehicleBasePrice;
+            if (basePrice <= 0)
+            {
+                basePrice = Math.Max(Helper.VehiclePrice, 0);
+            }
+
+            Helper.VehiclePrice = basePrice + (IsPerformanceUpgradeActive(Helper.VehPreview) ? PerformanceUpgradePrice : 0);
+        }
+
+        private static string GetPerformanceUpgradeItemAltTitle()
+        {
+            string amount = "$" + PerformanceUpgradePrice.ToString("N0");
+            return IsPerformanceUpgradeActive(Helper.VehPreview)
+                ? "~r~-" + amount
+                : "~g~+" + amount;
+        }
+
+        private static void UpdatePerformanceUpgradeItemState()
+        {
+            if (ItemPerformance == null)
+            {
+                return;
+            }
+
+            ItemPerformance.Title = IsPerformanceUpgradeActive(Helper.VehPreview)
+                ? GetPerformanceUpgradeRemoveTitle()
+                : GetPerformanceUpgradeApplyTitle();
+            ItemPerformance.AltTitle = GetPerformanceUpgradeItemAltTitle();
+            RefreshPreviewVehiclePrice();
+        }
+
+        private static void SetPerformanceModIndexToMax(VehicleModCollection mods, VehicleModType modType)
+        {
+            try
+            {
+                int count = mods[modType].Count;
+                mods[modType].Index = count > 0 ? count - 1 : -1;
+            }
+            catch
+            {
+            }
+        }
+
+        private static void SetPerformanceModIndexToStock(VehicleModCollection mods, VehicleModType modType)
+        {
+            try
+            {
+                mods[modType].Index = -1;
+            }
+            catch
+            {
+            }
+        }
+
+        private static void SetTogglePerformanceModState(VehicleModCollection mods, VehicleToggleModType modType, bool installed)
+        {
+            try
+            {
+                mods[modType].IsInstalled = installed;
+            }
+            catch
+            {
+            }
+        }
+
+        private static void ApplyPerformanceUpgrades(Vehicle vehicle)
+        {
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return;
+            }
+
+            VehicleModCollection mods = Mods(vehicle);
+            mods.InstallModKit();
+            SetPerformanceModIndexToMax(mods, VehicleModType.Suspension);
+            SetPerformanceModIndexToMax(mods, VehicleModType.Engine);
+            SetPerformanceModIndexToMax(mods, VehicleModType.Brakes);
+            SetPerformanceModIndexToMax(mods, VehicleModType.Transmission);
+            SetPerformanceModIndexToMax(mods, VehicleModType.Armor);
+            SetTogglePerformanceModState(mods, VehicleToggleModType.XenonHeadlights, true);
+            SetTogglePerformanceModState(mods, VehicleToggleModType.Turbo, true);
+            Function.Call(Hash.SET_VEHICLE_TYRES_CAN_BURST, vehicle, false);
+        }
+
+        private static void RemovePerformanceUpgrades(Vehicle vehicle)
+        {
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return;
+            }
+
+            VehicleModCollection mods = Mods(vehicle);
+            mods.InstallModKit();
+            SetPerformanceModIndexToStock(mods, VehicleModType.Suspension);
+            SetPerformanceModIndexToStock(mods, VehicleModType.Engine);
+            SetPerformanceModIndexToStock(mods, VehicleModType.Brakes);
+            SetPerformanceModIndexToStock(mods, VehicleModType.Transmission);
+            SetPerformanceModIndexToStock(mods, VehicleModType.Armor);
+            SetTogglePerformanceModState(mods, VehicleToggleModType.XenonHeadlights, false);
+            SetTogglePerformanceModState(mods, VehicleToggleModType.Turbo, false);
+            Function.Call(Hash.SET_VEHICLE_TYRES_CAN_BURST, vehicle, true);
+        }
+
         private static void AddInstructionalButtonIfValid(NativeMenu menu, InstructionalButton button)
         {
             if (!string.IsNullOrEmpty(button.Description))
@@ -445,7 +645,11 @@ namespace PremiumDeluxeRevamped
             CreateConfirmMenu();
             CreateCustomizeMenu();
             CreateColorCategory();
-            CustomiseMenu.Add(new NativeItem(CleanMenuText(Gxt("PERSO_MOD_PER"), "Performance"), CleanMenuText(Gxt("IE_MOD_OBJ4"), string.Empty)));
+            ItemPerformance = new NativeItem(GetPerformanceUpgradeApplyTitle(), CleanMenuText(Gxt("IE_MOD_OBJ4"), string.Empty))
+            {
+                AltTitle = GetPerformanceUpgradeItemAltTitle(),
+            };
+            CustomiseMenu.Add(ItemPerformance);
             CustomiseMenu.Add(new NativeItem(CleanMenuText(Helper.GetLangEntry("BTN_PLATE_NUMBER_NAME"), "Plate Number"), CleanMenuText(Gxt("IE_MOD_OBJ2"), string.Empty)));
             PlateMenu = NewMenu(CleanMenuText(Gxt("CMOD_MOD_PLA"), "Plate Style"), true, CustomiseMenu, ItemPlate);
             CreatePrimaryColor();
@@ -623,6 +827,11 @@ namespace PremiumDeluxeRevamped
                 HideAllMenus();
                 if (menu != null)
                 {
+                    if (object.ReferenceEquals(menu, CustomiseMenu))
+                    {
+                        UpdatePerformanceUpgradeItemState();
+                    }
+
                     RestoreSubmenuAltTitles(menu);
                     menu.Visible = true;
                     ResetSelection(menu);
@@ -649,6 +858,13 @@ namespace PremiumDeluxeRevamped
         public static void CreateCategoryMenu()
         {
             MainMenu = NewMenu(CleanMenuText(Gxt("CMOD_MOD_T"), "Categories"), true);
+
+            NativeItem searchVehiclesItem = new NativeItem("~h~" + CleanMenuText(Helper.GetLangEntry("BTN_SEARCH_VEHICLES"), "Search Vehicles"))
+            {
+                Tag = CategoryActionSearchVehicles,
+            };
+            MainMenu.Add(searchVehiclesItem);
+
             foreach (string file in System.IO.Directory.GetFiles(@".\scripts\PremiumDeluxeMotorsport\Vehicles\", "*.ini"))
             {
                 if (System.IO.File.Exists(file))
@@ -659,6 +875,7 @@ namespace PremiumDeluxeRevamped
                     MainMenu.Add(itemCat);
                 }
             }
+
             ResetSelection(MainMenu);
             MainMenu.ItemActivated += (sender, args) => CategoryItemSelectHandler(sender as NativeMenu, args.Item, (sender as NativeMenu)?.SelectedIndex ?? 0);
             MainMenu.Closed += (sender, args) =>
@@ -736,6 +953,7 @@ namespace PremiumDeluxeRevamped
                     Helper.SelectedVehicle = null;
                     Helper.VehPreview?.Delete();
                 }
+                PreviewVehicleBasePrice = 0;
                 Helper.wsCamera.Stop();
                 Helper.DrawSpotLight = false;
                 Helper.HideHud = false;
@@ -1001,7 +1219,9 @@ namespace PremiumDeluxeRevamped
                 Helper.VehPreview.IsUndriveable = true;
                 Helper.VehPreview.LockStatus = VehicleLockStatus.IgnoredByPlayer;
                 Helper.VehPreview.DirtLevel = 0f;
-                Helper.VehiclePrice = t.Item2;
+                PreviewVehicleBasePrice = t.Item2;
+                Helper.VehiclePrice = PreviewVehicleBasePrice;
+                UpdatePerformanceUpgradeItemState();
                 Helper.wsCamera.RepositionFor(Helper.VehPreview);
                 Helper.optLastVehHash = Helper.VehPreview.Model.Hash;
                 Helper.optLastVehName = Helper.VehicleName;
@@ -1014,6 +1234,7 @@ namespace PremiumDeluxeRevamped
                     Helper.hiddenSave.SetValue("VEHICLES", Helper.VehPreview.Model.Hash.ToString(), 1);
                     Helper.hiddenSave.Save();
                 }
+
             }
             catch (Exception ex)
             {
@@ -1106,6 +1327,7 @@ namespace PremiumDeluxeRevamped
             Helper.HideHud = false;
             Helper.ShowVehicleName = false;
 
+            Helper.TestDrive = 2;
             Helper.VehPreview.IsUndriveable = false;
             Helper.VehPreview.LockStatus = VehicleLockStatus.Unlocked;
             Helper.VehPreview.IsPositionFrozen = false;
@@ -1211,19 +1433,19 @@ namespace PremiumDeluxeRevamped
                     }
                 }
 
-                if (selectedItem.Title == Gxt("PERSO_MOD_PER"))
+                if (object.ReferenceEquals(selectedItem, ItemPerformance))
                 {
-                    VehicleModCollection mods = Mods(Helper.VehPreview);
-                    mods.InstallModKit();
-                    mods[VehicleModType.Suspension].Index = Math.Max(mods[VehicleModType.Suspension].Count - 1, 0);
-                    mods[VehicleModType.Engine].Index = Math.Max(mods[VehicleModType.Engine].Count - 1, 0);
-                    mods[VehicleModType.Brakes].Index = Math.Max(mods[VehicleModType.Brakes].Count - 1, 0);
-                    mods[VehicleModType.Transmission].Index = Math.Max(mods[VehicleModType.Transmission].Count - 1, 0);
-                    mods[VehicleModType.Armor].Index = Math.Max(mods[VehicleModType.Armor].Count - 1, 0);
-                    mods[VehicleToggleModType.XenonHeadlights].IsInstalled = true;
-                    mods[VehicleToggleModType.Turbo].IsInstalled = true;
-                    Function.Call(Hash.SET_VEHICLE_TYRES_CAN_BURST, Helper.VehPreview, false);
-                    Function.Call(Hash.ANIMPOSTFX_PLAY, "MP_corona_switch_supermod", 0, true);
+                    if (IsPerformanceUpgradeActive(Helper.VehPreview))
+                    {
+                        RemovePerformanceUpgrades(Helper.VehPreview);
+                    }
+                    else
+                    {
+                        ApplyPerformanceUpgrades(Helper.VehPreview);
+                        Function.Call(Hash.ANIMPOSTFX_PLAY, "MP_corona_switch_supermod", 0, true);
+                    }
+
+                    UpdatePerformanceUpgradeItemState();
                     Function.Call(Hash.PLAY_SOUND_FRONTEND, -1, "Lowrider_Upgrade", "Lowrider_Super_Mod_Garage_Sounds", true);
                 }
                 else if (selectedItem.Title == Helper.GetLangEntry("BTN_PLATE_NUMBER_NAME"))
@@ -1245,13 +1467,141 @@ namespace PremiumDeluxeRevamped
         {
             try
             {
-                Tuple<int, string> t = (Tuple<int, string>)selectedItem.Tag;
+                if (selectedItem == null)
+                {
+                    return;
+                }
+
+                string categoryAction = selectedItem.Tag as string;
+                if (categoryAction == CategoryActionSearchVehicles)
+                {
+                    ShowOnly(MainMenu);
+                    string searchQuery = Game.GetUserInput(string.Empty);
+                    if (string.IsNullOrWhiteSpace(searchQuery))
+                    {
+                        return;
+                    }
+
+                    if (CreateVehicleSearchMenu(searchQuery))
+                    {
+                        ShowOnly(VehicleMenu);
+                    }
+                    else
+                    {
+                        GtaScreen.ShowSubtitle("~r~No vehicles found for: ~w~" + searchQuery, 3500);
+                        ShowOnly(MainMenu);
+                    }
+
+                    return;
+                }
+
+                Tuple<int, string> t = selectedItem.Tag as Tuple<int, string>;
+                if (t == null)
+                {
+                    return;
+                }
+
                 CreateVehicleMenu($@".\scripts\PremiumDeluxeMotorsport\Vehicles\{t.Item2}.ini", Helper.GetLangEntry(t.Item2));
                 ShowOnly(VehicleMenu);
             }
             catch (Exception ex)
             {
                 logger.Log(ex.Message + " " + ex.StackTrace);
+            }
+        }
+
+        private static bool DoesVehicleNameMatchSearch(string query, string localizedModelName, string rawModelName)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return false;
+            }
+
+            string trimmedQuery = query.Trim();
+            return ContainsIgnoreCase(localizedModelName, trimmedQuery)
+                || ContainsIgnoreCase(rawModelName, trimmedQuery);
+        }
+
+        private static void AddVehicleItemToMenu(NativeMenu menu, string modelName, int price, string fullVehicleName, string makeKey)
+        {
+            if (menu == null)
+            {
+                return;
+            }
+
+            string vehicleMenuTitle = BuildVehicleMenuTitle(fullVehicleName, price);
+            NativeItem item = new NativeItem(vehicleMenuTitle)
+            {
+                AltTitle = "$" + price.ToString("N0"),
+                Tag = Tuple.Create(modelName, price, fullVehicleName, makeKey),
+            };
+
+            Model model = new Model(modelName);
+            if (model.IsInCdImage && model.IsValid)
+            {
+                menu.Add(item);
+            }
+        }
+
+        private static bool CreateVehicleSearchMenu(string searchQuery)
+        {
+            try
+            {
+                if (VehicleMenu != null)
+                {
+                    VehicleMenu.Visible = false;
+                }
+
+                VehicleMenu = NewMenu(CleanMenuText(Helper.GetLangEntry("BTN_SEARCH_RESULTS"), "Search Results").ToUpperInvariant(), true);
+
+                foreach (string file in System.IO.Directory.GetFiles(@".\scripts\PremiumDeluxeMotorsport\Vehicles\", "*.ini"))
+                {
+                    if (!System.IO.File.Exists(file))
+                    {
+                        continue;
+                    }
+
+                    Reader format = new Reader(file, Parameters);
+                    for (int ii = 0; ii < format.Count; ii++)
+                    {
+                        int i = (format.Count - 1) - ii;
+                        decimal parsedPrice = decimal.TryParse(format[i]["price"], out decimal parsed) ? parsed : 0m;
+                        string makeName = CleanMenuText(Gxt(format[i]["make"]), format[i]["make"]);
+                        string localizedModelName = CleanMenuText(Gxt(format[i]["gxt"]), format[i]["name"]);
+                        string rawModelName = CleanMenuText(format[i]["name"], localizedModelName);
+                        string fullVehicleName = CleanMenuText((makeName + " " + localizedModelName).Trim(), rawModelName);
+
+                        if (!DoesVehicleNameMatchSearch(searchQuery, localizedModelName, rawModelName))
+                        {
+                            continue;
+                        }
+
+                        AddVehicleItemToMenu(VehicleMenu, format[i]["model"], (int)parsedPrice, fullVehicleName, format[i]["make"]);
+                    }
+                }
+
+                if (VehicleMenu.Items.Count == 0)
+                {
+                    return false;
+                }
+
+                ResetSelection(VehicleMenu);
+                VehicleMenu.ItemActivated += (menuSender, args) => VehicleSelectHandler(menuSender as NativeMenu, args.Item, (menuSender as NativeMenu)?.SelectedIndex ?? 0);
+                VehicleMenu.SelectedIndexChanged += (menuSender, args) => VehicleChangeHandler(menuSender as NativeMenu, args.Index);
+                VehicleMenu.Closed += (menuSender, args) =>
+                {
+                    if (!suppressCloseHandlers)
+                    {
+                        ShowOnly(MainMenu);
+                    }
+                };
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger.Log("Error CreateVehicleSearchMenu " + ex.Message + " " + ex.StackTrace);
+                return false;
             }
         }
 
@@ -1273,17 +1623,7 @@ namespace PremiumDeluxeRevamped
                     string makeName = CleanMenuText(Gxt(format[i]["make"]), format[i]["make"]);
                     string modelName = CleanMenuText(Gxt(format[i]["gxt"]), format[i]["name"]);
                     string fullVehicleName = CleanMenuText(($"{makeName} {modelName}").Trim(), format[i]["name"]);
-                    string vehicleMenuTitle = BuildVehicleMenuTitle(fullVehicleName, Helper.Price);
-                    NativeItem item = new NativeItem(vehicleMenuTitle)
-                    {
-                        AltTitle = "$" + Helper.Price.ToString("N0"),
-                        Tag = Tuple.Create(format[i]["model"], (int)Helper.Price, fullVehicleName, format[i]["make"]),
-                    };
-                    Model model = new Model(format[i]["model"]);
-                    if (model.IsInCdImage && model.IsValid)
-                    {
-                        VehicleMenu.Add(item);
-                    }
+                    AddVehicleItemToMenu(VehicleMenu, format[i]["model"], (int)Helper.Price, fullVehicleName, format[i]["make"]);
                 }
                 ResetSelection(VehicleMenu);
                 VehicleMenu.ItemActivated += (sender, args) => VehicleSelectHandler(sender as NativeMenu, args.Item, (sender as NativeMenu)?.SelectedIndex ?? 0);
